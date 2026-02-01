@@ -8,7 +8,7 @@ from app.observability.metrics import CHAOS_EVENTS
 
 class FaultInjector:
     """
-    Chaos Engineering Fault Injection Engine for LLM Pipelines
+    Chaos Engineering Fault Injection Engine
     """
 
     def __init__(self, config_path: str):
@@ -17,98 +17,93 @@ class FaultInjector:
 
         self._lock = threading.Lock()
 
-        self.config = self._load_config()
+        self._load()
+
+    # ----------------------------------
+    # Config Handling
+    # ----------------------------------
+
+    def _load(self):
+
+        try:
+            with open(self.config_path, "r") as f:
+                self.config = yaml.safe_load(f) or {}
+
+        except Exception as e:
+
+            print(f"[CHAOS] Config load failed: {e}")
+
+            self.config = {}
 
         self.enabled = self.config.get("enabled", False)
 
         self.faults = self.config.get("faults", {})
 
-    # ----------------------------------
-    # Config Management
-    # ----------------------------------
-
-    def _load_config(self) -> dict:
-
-        try:
-            with open(self.config_path, "r") as f:
-                return yaml.safe_load(f) or {}
-
-        except Exception as e:
-
-            print(f"[CHAOS] Failed to load config: {e}")
-
-            return {"enabled": False}
-
     def reload(self):
         """
-        Reload chaos config at runtime
+        Reload chaos configuration
         """
 
         with self._lock:
-
-            self.config = self._load_config()
-
-            self.enabled = self.config.get("enabled", False)
-
-            self.faults = self.config.get("faults", {})
+            self._load()
 
     # ----------------------------------
     # Internal Helpers
     # ----------------------------------
 
-    def _should_inject(self, fault_name: str) -> bool:
+    def _should_inject(self, name: str) -> bool:
 
         if not self.enabled:
             return False
 
-        fault = self.faults.get(fault_name, {})
+        fault = self.faults.get(name, {})
 
         if not fault.get("enabled", False):
             return False
 
-        probability = fault.get("probability", 0.0)
+        prob = fault.get("probability", 0.0)
 
-        return random.random() < probability
+        return random.random() < prob
 
-    def _record_event(self, fault_name: str):
+    def _record(self, name: str):
 
         try:
-            CHAOS_EVENTS.labels(fault_name).inc()
+            CHAOS_EVENTS.labels(name).inc()
         except Exception:
             pass
 
     # ----------------------------------
-    # Fault Injection Hooks
+    # Hooks
     # ----------------------------------
 
     def before_retrieval(self, query: str) -> str:
 
-        # Latency Injection
+        # Latency
         if self._should_inject("inject_latency"):
 
-            delay_ms = self.faults["inject_latency"].get(
+            delay = self.faults["inject_latency"].get(
                 "delay_ms", 1000
             )
 
-            self._record_event("inject_latency")
+            self._record("inject_latency")
 
-            time.sleep(delay_ms / 1000)
+            time.sleep(delay / 1000)
 
         return query
 
     def after_retrieval(self, chunks):
 
-        # Drop Retrieval
+        # Drop retrieval
         if self._should_inject("drop_retrieval"):
 
-            self._record_event("drop_retrieval")
+            self._record("drop_retrieval")
 
             return []
 
-        # Corrupt Context
+        # Corrupt context
         if self._should_inject("corrupt_context") and chunks:
 
-            self._record_event("corrupt_context")
+            self._record("corrupt_context")
 
             corrupted = list(chunks)
 
@@ -122,30 +117,30 @@ class FaultInjector:
 
     def before_llm(self, prompt: str) -> str:
 
-        # Token Overflow Simulation
+        # Overflow
         if self._should_inject("overflow_prompt"):
 
             max_tokens = self.faults["overflow_prompt"].get(
                 "max_tokens", 200
             )
 
-            self._record_event("overflow_prompt")
+            self._record("overflow_prompt")
 
             if len(prompt) > 0:
 
-                repeat_factor = max_tokens // max(len(prompt), 1) + 5
+                repeat = max_tokens // max(len(prompt), 1) + 5
 
-                prompt = prompt * repeat_factor
+                prompt = prompt * repeat
 
         return prompt
 
     def after_llm(self, response: str) -> str:
 
-        # Simulate Model Crash
+        # Kill model
         if self._should_inject("kill_model"):
 
-            self._record_event("kill_model")
+            self._record("kill_model")
 
-            raise RuntimeError("Injected model crash (chaos testing)")
+            raise RuntimeError("Injected model crash")
 
         return response

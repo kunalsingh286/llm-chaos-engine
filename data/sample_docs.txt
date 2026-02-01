@@ -1,0 +1,3 @@
+LLMs are probabilistic models that generate text based on patterns in data.
+Chaos engineering tests system resilience by injecting controlled failures.
+Fallback strategies improve reliability of distributed systems.

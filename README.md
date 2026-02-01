@@ -45,3 +45,4 @@ FastAPI → Retrieval → LLM Router → Fallback → Metrics → Dashboards
    ```bash
    ollama run llama3
    ollama run mistral
+# llm-chaos-engine

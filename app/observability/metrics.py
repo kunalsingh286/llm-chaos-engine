@@ -31,3 +31,13 @@ CHAOS_EVENTS = Counter(
     "Total chaos fault injections",
     ["fault_type"]
 )
+
+HALLUCINATION_COUNT = Counter(
+    "llm_hallucinations_total",
+    "Total hallucinated responses"
+)
+
+QUALITY_SCORE = Histogram(
+    "llm_groundedness_score",
+    "Groundedness score distribution"
+)

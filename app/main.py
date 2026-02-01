@@ -4,17 +4,23 @@ from fastapi import FastAPI
 from prometheus_client import generate_latest
 from starlette.responses import Response
 
+# Schemas
 from app.schemas.request import QueryRequest
 from app.schemas.response import QueryResponse
 
+# Core components
 from app.retrieval.vector_store import VectorStore
 from app.chaos.fault_injector import FaultInjector
 from app.fallback.router import FallbackRouter
+from app.quality.evaluator import QualityEvaluator
 
+# Metrics
 from app.observability.metrics import (
     REQUEST_COUNT,
     REQUEST_LATENCY,
     RETRIEVAL_LATENCY,
+    HALLUCINATION_COUNT,
+    QUALITY_SCORE,
 )
 
 
@@ -24,13 +30,19 @@ from app.observability.metrics import (
 
 app = FastAPI(
     title="LLM Chaos Engineering Platform",
-    version="0.2.0"
+    version="0.4.0"
 )
 
-# Core components
+# System Components
 vector_store = VectorStore()
-fault_injector = FaultInjector("policies/chaos_config.yaml")
+
+fault_injector = FaultInjector(
+    "policies/chaos_config.yaml"
+)
+
 fallback_router = FallbackRouter()
+
+quality_evaluator = QualityEvaluator()
 
 
 # ----------------------------------
@@ -41,7 +53,8 @@ fallback_router = FallbackRouter()
 def health():
     return {
         "status": "ok",
-        "service": "llm-chaos-engine"
+        "service": "llm-chaos-engine",
+        "version": "0.4.0"
     }
 
 
@@ -76,6 +89,10 @@ def chaos_status():
 @app.post("/query", response_model=QueryResponse)
 def query_llm(request: QueryRequest):
 
+    # -------------------------------
+    # Request Tracking
+    # -------------------------------
+
     REQUEST_COUNT.inc()
 
     start_total = time.time()
@@ -86,17 +103,23 @@ def query_llm(request: QueryRequest):
 
     start_retrieval = time.time()
 
-    # Apply chaos before retrieval
-    query = fault_injector.before_retrieval(request.query)
+    # Chaos before retrieval
+    query = fault_injector.before_retrieval(
+        request.query
+    )
 
     chunks = vector_store.query(query)
 
-    # Apply chaos after retrieval
-    chunks = fault_injector.after_retrieval(chunks)
+    # Chaos after retrieval
+    chunks = fault_injector.after_retrieval(
+        chunks
+    )
 
     retrieval_latency = time.time() - start_retrieval
 
-    RETRIEVAL_LATENCY.observe(retrieval_latency)
+    RETRIEVAL_LATENCY.observe(
+        retrieval_latency
+    )
 
     # -------------------------------
     # Prompt Construction
@@ -105,11 +128,12 @@ def query_llm(request: QueryRequest):
     context = "\n".join(chunks)
 
     prompt = f"""
-You are a helpful AI assistant.
+You are a reliable AI assistant.
 
-Answer the question using ONLY the context.
+Answer the question using ONLY the provided context.
 
-If the answer is not in the context, say you don't know.
+If the answer is not in the context,
+say "I don't know based on the given information."
 
 Question:
 {query}
@@ -118,28 +142,56 @@ Context:
 {context}
 """
 
-    # Apply chaos before LLM
-    prompt = fault_injector.before_llm(prompt)
+    # Chaos before LLM
+    prompt = fault_injector.before_llm(
+        prompt
+    )
 
     # -------------------------------
     # Generation Phase
     # -------------------------------
 
     try:
-        answer = fallback_router.generate(prompt)
 
-        # Apply chaos after LLM
-        answer = fault_injector.after_llm(answer)
+        answer = fallback_router.generate(
+            prompt
+        )
+
+        # Chaos after LLM
+        answer = fault_injector.after_llm(
+            answer
+        )
 
     except Exception as e:
 
         # Hard failure fallback
+        print("[PIPELINE ERROR]", e)
+
         answer = (
             "System temporarily unavailable due to "
             "simulated failure. Please retry."
         )
 
-        print(f"[CHAOS ERROR] {e}")
+    # -------------------------------
+    # Quality Evaluation
+    # -------------------------------
+
+    quality = quality_evaluator.evaluate(
+        answer=answer,
+        context_chunks=chunks,
+        question=query
+    )
+
+    QUALITY_SCORE.observe(
+        quality["groundedness"]
+    )
+
+    if quality["hallucinated"]:
+        HALLUCINATION_COUNT.inc()
+
+    # Optional debug logging (remove later)
+    if quality["hallucinated"]:
+        print("[QUALITY WARNING]", quality)
 
     # -------------------------------
     # Total Latency
@@ -147,7 +199,9 @@ Context:
 
     total_latency = time.time() - start_total
 
-    REQUEST_LATENCY.observe(total_latency)
+    REQUEST_LATENCY.observe(
+        total_latency
+    )
 
     # -------------------------------
     # Response

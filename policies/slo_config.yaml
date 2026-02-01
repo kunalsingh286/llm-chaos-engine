@@ -1,0 +1,21 @@
+slo:
+
+  availability:
+    target: 0.995     # 99.5%
+    window_days: 30
+
+  latency:
+    p95_ms: 3000
+    window_days: 7
+
+  groundedness:
+    min_score: 0.6
+    window_days: 7
+
+  hallucination_rate:
+    max_rate: 0.05
+    window_days: 7
+
+  fallback_rate:
+    max_rate: 0.10
+    window_days: 7

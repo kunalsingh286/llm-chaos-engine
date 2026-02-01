@@ -8,11 +8,16 @@ from starlette.responses import Response
 from app.schemas.request import QueryRequest
 from app.schemas.response import QueryResponse
 
-# Core components
+# Core pipeline
 from app.retrieval.vector_store import VectorStore
 from app.chaos.fault_injector import FaultInjector
 from app.fallback.router import FallbackRouter
+
+# Quality
 from app.quality.evaluator import QualityEvaluator
+
+# Governance
+from app.governance.slo import SLOEvaluator
 
 # Metrics
 from app.observability.metrics import (
@@ -30,10 +35,10 @@ from app.observability.metrics import (
 
 app = FastAPI(
     title="LLM Chaos Engineering Platform",
-    version="0.4.0"
+    version="0.5.0"
 )
 
-# System Components
+# Core components
 vector_store = VectorStore()
 
 fault_injector = FaultInjector(
@@ -43,6 +48,8 @@ fault_injector = FaultInjector(
 fallback_router = FallbackRouter()
 
 quality_evaluator = QualityEvaluator()
+
+slo_evaluator = SLOEvaluator()
 
 
 # ----------------------------------
@@ -54,7 +61,7 @@ def health():
     return {
         "status": "ok",
         "service": "llm-chaos-engine",
-        "version": "0.4.0"
+        "version": "0.5.0"
     }
 
 
@@ -83,6 +90,15 @@ def chaos_status():
 
 
 # ----------------------------------
+# SLO / Governance Endpoint
+# ----------------------------------
+
+@app.get("/slo")
+def slo_status():
+    return slo_evaluator.evaluate()
+
+
+# ----------------------------------
 # Main Query Endpoint
 # ----------------------------------
 
@@ -94,6 +110,8 @@ def query_llm(request: QueryRequest):
     # -------------------------------
 
     REQUEST_COUNT.inc()
+
+    slo_evaluator.record_request(success=True)
 
     start_total = time.time()
 
@@ -130,10 +148,8 @@ def query_llm(request: QueryRequest):
     prompt = f"""
 You are a reliable AI assistant.
 
-Answer the question using ONLY the provided context.
-
-If the answer is not in the context,
-say "I don't know based on the given information."
+Answer ONLY using the provided context.
+If the answer is not in the context, say "I don't know".
 
 Question:
 {query}
@@ -143,9 +159,7 @@ Context:
 """
 
     # Chaos before LLM
-    prompt = fault_injector.before_llm(
-        prompt
-    )
+    prompt = fault_injector.before_llm(prompt)
 
     # -------------------------------
     # Generation Phase
@@ -164,13 +178,18 @@ Context:
 
     except Exception as e:
 
-        # Hard failure fallback
-        print("[PIPELINE ERROR]", e)
+        # Register failure
+        slo_evaluator.record_request(
+            success=False
+        )
 
         answer = (
-            "System temporarily unavailable due to "
-            "simulated failure. Please retry."
+            "System temporarily unavailable "
+            "due to simulated failure. "
+            "Please retry."
         )
+
+        print(f"[PIPELINE ERROR] {e}")
 
     # -------------------------------
     # Quality Evaluation
@@ -186,12 +205,15 @@ Context:
         quality["groundedness"]
     )
 
+    slo_evaluator.record_groundedness(
+        quality["groundedness"]
+    )
+
     if quality["hallucinated"]:
+
         HALLUCINATION_COUNT.inc()
 
-    # Optional debug logging (remove later)
-    if quality["hallucinated"]:
-        print("[QUALITY WARNING]", quality)
+        slo_evaluator.record_hallucination()
 
     # -------------------------------
     # Total Latency
@@ -200,6 +222,10 @@ Context:
     total_latency = time.time() - start_total
 
     REQUEST_LATENCY.observe(
+        total_latency
+    )
+
+    slo_evaluator.record_latency(
         total_latency
     )
 

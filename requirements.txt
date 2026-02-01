@@ -3,3 +3,12 @@ uvicorn
 requests
 pydantic
 prometheus-client
+
+# RAG
+chromadb
+sentence-transformers
+
+# Utils
+python-dotenv
+pyyaml
+

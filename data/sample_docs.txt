@@ -1,3 +1,17 @@
-LLMs are probabilistic models that generate text based on patterns in data.
-Chaos engineering tests system resilience by injecting controlled failures.
-Fallback strategies improve reliability of distributed systems.
+Chaos engineering is the practice of injecting failures into systems to test resilience.
+
+LLMs are probabilistic models that generate text based on learned patterns.
+
+Retrieval-Augmented Generation improves factual accuracy by grounding answers in documents.
+
+Fallback routing improves system availability during partial failures.
+
+Service Level Objectives define reliability targets for systems.
+
+Prometheus is used for monitoring distributed systems.
+
+Grafana is used to visualize metrics.
+
+Circuit breakers prevent cascading failures.
+
+Observability includes metrics, logs, and traces.

@@ -1,0 +1,25 @@
+enabled: true
+
+faults:
+
+  inject_latency:
+    enabled: true
+    delay_ms: 3000
+    probability: 0.2
+
+  drop_retrieval:
+    enabled: true
+    probability: 0.15
+
+  corrupt_context:
+    enabled: true
+    probability: 0.15
+
+  kill_model:
+    enabled: true
+    probability: 0.05
+
+  overflow_prompt:
+    enabled: true
+    max_tokens: 200
+    probability: 0.1

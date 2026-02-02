@@ -1,48 +1,79 @@
-# LLM Chaos Engineering & Reliability Platform
+# 🚀 LLM Chaos Engineering & Reliability Platform
 
-## Overview
-A production-style chaos engineering framework for LLM systems that intentionally
-injects failures to test resilience, reliability, and observability of AI pipelines.
+> A production-grade, self-healing platform for building **reliable, trustworthy, and governable LLM systems**.
 
-## Why This Exists
-LLMs are probabilistic, brittle systems.
-Most teams build demos. This platform builds failure-aware AI.
+This project demonstrates how modern AI systems can be engineered to **fail safely, recover automatically, and continuously validate quality** — inspired by Site Reliability Engineering (SRE) practices.
 
-## Core Features
-- Fault injection framework (Phase 2)
-- Automatic fallback routing (Phase 3)
-- Circuit breakers (Phase 3)
-- Hallucination detection (Phase 4)
-- SLO monitoring (Phase 5)
-- Reliability dashboards (Phase 5)
-- Policy-driven behavior control (Phase 6)
-- Auto-generated incident postmortems (Phase 6)
-- Shadow traffic replay testing (Phase 7)
+---
 
-## Architecture
-FastAPI → Retrieval → LLM Router → Fallback → Metrics → Dashboards
+## 🌟 Why This Project?
 
-## Failure Modes Simulated
-- Hallucinations
-- Empty retrieval
-- Latency spikes
-- Model crashes
-- Token overflows
+Most LLM projects focus only on:
+- Prompting
+- APIs
+- UI
 
-## Tech Stack
-- LLMs: Ollama (llama3, mistral, phi-3)
-- Backend: FastAPI
-- Vector DB: Chroma / FAISS
-- Metrics: Prometheus, Grafana
-- Tracing: OpenTelemetry
-- Storage: Postgres
-- Policy Engine: YAML + Python
-- Evaluation: LLM-as-judge
+This platform focuses on what actually matters in production:
 
-## How to Run (Phase 0)
+✅ Reliability  
+✅ Resilience  
+✅ Trustworthiness  
+✅ Governance  
+✅ Release Safety  
 
-1. Start Ollama locally:
-   ```bash
-   ollama run llama3
-   ollama run mistral
-# llm-chaos-engine
+> **I don’t just build AI systems. I engineer them for failure.**
+
+---
+
+## 🧠 Platform Capabilities
+
+### 1️⃣ Retrieval-Augmented Generation (RAG)
+- SentenceTransformers embeddings
+- Chroma vector store
+- Context-grounded responses
+
+### 2️⃣ Chaos Engineering
+- Config-driven fault injection
+- Latency simulation
+- Context corruption
+- Retrieval drop
+- Model crash injection
+- Token overflow simulation
+
+### 3️⃣ Resilience & Recovery
+- Circuit breakers
+- Retry budgets
+- Cache fallback
+- Multi-model routing (Ollama)
+- Graceful degradation
+
+### 4️⃣ Quality & Hallucination Detection
+- Groundedness scoring
+- LLM-as-Judge
+- Semantic similarity checks
+- Hallucination metrics
+
+### 5️⃣ SLO Governance
+- Availability targets
+- Latency SLOs
+- Error budgets
+- Burn-rate tracking
+- Reliability reporting
+
+### 6️⃣ Autonomous Policy Engine
+- Declarative reliability rules
+- Automatic safe-mode
+- Chaos control
+- Self-healing actions
+- AI-generated postmortems
+
+### 7️⃣ Shadow Traffic & Replay Testing
+- Real traffic sampling
+- Offline replay under chaos
+- Regression detection
+- Release safety validation
+
+---
+
+## 🏗 Architecture Overview
+

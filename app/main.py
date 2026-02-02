@@ -1,32 +1,62 @@
 import time
 
 from fastapi import FastAPI
-from prometheus_client import generate_latest
 from starlette.responses import Response
+from prometheus_client import generate_latest
 
+
+# -----------------------------
 # Schemas
+# -----------------------------
+
 from app.schemas.request import QueryRequest
 from app.schemas.response import QueryResponse
 
-# Core pipeline
+
+# -----------------------------
+# Core
+# -----------------------------
+
 from app.retrieval.vector_store import VectorStore
 from app.chaos.fault_injector import FaultInjector
 from app.fallback.router import FallbackRouter
 
+
+# -----------------------------
 # Quality
+# -----------------------------
+
 from app.quality.evaluator import QualityEvaluator
 
+
+# -----------------------------
 # Governance
+# -----------------------------
+
 from app.governance.slo import SLOEvaluator
 
-# Policy Engine
+
+# -----------------------------
+# Policy + Incidents
+# -----------------------------
+
 from app.policy.engine import PolicyEngine
 from app.policy.actions import PolicyActions
-
-# Incidents
 from app.incidents.manager import IncidentManager
 
+
+# -----------------------------
+# Replay
+# -----------------------------
+
+from app.replay.logger import ShadowLogger
+from app.replay.runner import ReplayRunner
+
+
+# -----------------------------
 # Metrics
+# -----------------------------
+
 from app.observability.metrics import (
     REQUEST_COUNT,
     REQUEST_LATENCY,
@@ -36,16 +66,20 @@ from app.observability.metrics import (
 )
 
 
-# ----------------------------------
-# App Initialization
-# ----------------------------------
+# ======================================================
+# App Init
+# ======================================================
 
 app = FastAPI(
     title="LLM Chaos Engineering Platform",
-    version="0.6.0"
+    version="1.0.0"
 )
 
-# Core components
+
+# -----------------------------
+# Components
+# -----------------------------
+
 vector_store = VectorStore()
 
 fault_injector = FaultInjector(
@@ -58,35 +92,59 @@ quality_evaluator = QualityEvaluator()
 
 slo_evaluator = SLOEvaluator()
 
-# Policy system
+
+# -----------------------------
+# Policy System
+# -----------------------------
+
 policy_actions = PolicyActions(
     fault_injector,
     fallback_router
 )
 
-policy_engine = PolicyEngine(
-    policy_actions
-)
+policy_engine = PolicyEngine(policy_actions)
 
 incident_manager = IncidentManager()
 
 
-# ----------------------------------
-# Health Endpoint
-# ----------------------------------
+# -----------------------------
+# Replay System
+# -----------------------------
+
+shadow_logger = ShadowLogger()
+
+
+def replay_client(prompt: str):
+    return fallback_router.generate(prompt)
+
+
+replay_runner = ReplayRunner(
+    replay_client,
+    fault_injector,
+    fallback_router
+)
+
+
+# ======================================================
+# Endpoints
+# ======================================================
+
+# -----------------------------
+# Health
+# -----------------------------
 
 @app.get("/health")
 def health():
     return {
         "status": "ok",
         "service": "llm-chaos-engine",
-        "version": "0.6.0"
+        "version": "1.0.0"
     }
 
 
-# ----------------------------------
-# Metrics Endpoint (Prometheus)
-# ----------------------------------
+# -----------------------------
+# Metrics
+# -----------------------------
 
 @app.get("/metrics")
 def metrics():
@@ -96,9 +154,9 @@ def metrics():
     )
 
 
-# ----------------------------------
-# Chaos Status Endpoint
-# ----------------------------------
+# -----------------------------
+# Chaos Status
+# -----------------------------
 
 @app.get("/chaos")
 def chaos_status():
@@ -108,34 +166,43 @@ def chaos_status():
     }
 
 
-# ----------------------------------
-# SLO / Governance Endpoint
-# ----------------------------------
+# -----------------------------
+# SLO Status
+# -----------------------------
 
 @app.get("/slo")
 def slo_status():
     return slo_evaluator.evaluate()
 
 
-# ----------------------------------
-# Incidents Endpoint
-# ----------------------------------
+# -----------------------------
+# Incidents
+# -----------------------------
 
 @app.get("/incidents")
 def list_incidents():
     return incident_manager.list()
 
 
-# ----------------------------------
-# Main Query Endpoint
-# ----------------------------------
+# -----------------------------
+# Replay
+# -----------------------------
+
+@app.post("/replay")
+def run_replay():
+    return replay_runner.run()
+
+
+# ======================================================
+# Main Query Pipeline
+# ======================================================
 
 @app.post("/query", response_model=QueryResponse)
 def query_llm(request: QueryRequest):
 
-    # -------------------------------
+    # --------------------------------
     # Request Tracking
-    # -------------------------------
+    # --------------------------------
 
     REQUEST_COUNT.inc()
 
@@ -143,9 +210,9 @@ def query_llm(request: QueryRequest):
 
     start_total = time.time()
 
-    # -------------------------------
+    # --------------------------------
     # Retrieval Phase
-    # -------------------------------
+    # --------------------------------
 
     start_retrieval = time.time()
 
@@ -153,6 +220,9 @@ def query_llm(request: QueryRequest):
     query = fault_injector.before_retrieval(
         request.query
     )
+
+    # Shadow traffic logging
+    shadow_logger.log(query)
 
     chunks = vector_store.query(query)
 
@@ -167,9 +237,9 @@ def query_llm(request: QueryRequest):
         retrieval_latency
     )
 
-    # -------------------------------
+    # --------------------------------
     # Prompt Construction
-    # -------------------------------
+    # --------------------------------
 
     context = "\n".join(chunks)
 
@@ -187,11 +257,13 @@ Context:
 """
 
     # Chaos before LLM
-    prompt = fault_injector.before_llm(prompt)
+    prompt = fault_injector.before_llm(
+        prompt
+    )
 
-    # -------------------------------
+    # --------------------------------
     # Generation Phase
-    # -------------------------------
+    # --------------------------------
 
     try:
 
@@ -206,22 +278,21 @@ Context:
 
     except Exception as e:
 
-        # Register failure
+        # Failure record
         slo_evaluator.record_request(
             success=False
         )
 
         answer = (
-            "System temporarily unavailable "
-            "due to simulated failure. "
-            "Please retry."
+            "System temporarily unavailable. "
+            "Please retry later."
         )
 
         print(f"[PIPELINE ERROR] {e}")
 
-    # -------------------------------
+    # --------------------------------
     # Quality Evaluation
-    # -------------------------------
+    # --------------------------------
 
     quality = quality_evaluator.evaluate(
         answer=answer,
@@ -243,9 +314,9 @@ Context:
 
         slo_evaluator.record_hallucination()
 
-    # -------------------------------
-    # Total Latency
-    # -------------------------------
+    # --------------------------------
+    # Latency
+    # --------------------------------
 
     total_latency = time.time() - start_total
 
@@ -257,9 +328,9 @@ Context:
         total_latency
     )
 
-    # -------------------------------
-    # Governance & Policy Enforcement
-    # -------------------------------
+    # --------------------------------
+    # Policy Evaluation
+    # --------------------------------
 
     slo_state = slo_evaluator.evaluate()
 
@@ -274,9 +345,9 @@ Context:
             applied_policies
         )
 
-    # -------------------------------
+    # --------------------------------
     # Response
-    # -------------------------------
+    # --------------------------------
 
     return QueryResponse(
         answer=answer,

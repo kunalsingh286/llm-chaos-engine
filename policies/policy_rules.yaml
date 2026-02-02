@@ -1,0 +1,33 @@
+policies:
+
+  - name: high_latency_protection
+
+    condition:
+      latency_ok: false
+
+    actions:
+      - enable_safe_mode
+      - reduce_chaos
+      - prefer_cache
+
+
+  - name: hallucination_guard
+
+    condition:
+      hallucination_ok: false
+
+    actions:
+      - reduce_temperature
+      - rerank_retrieval
+      - enable_safe_mode
+
+
+  - name: instability_recovery
+
+    condition:
+      availability_ok: false
+
+    actions:
+      - disable_primary_model
+      - increase_fallback
+      - reduce_chaos

@@ -19,6 +19,13 @@ from app.quality.evaluator import QualityEvaluator
 # Governance
 from app.governance.slo import SLOEvaluator
 
+# Policy Engine
+from app.policy.engine import PolicyEngine
+from app.policy.actions import PolicyActions
+
+# Incidents
+from app.incidents.manager import IncidentManager
+
 # Metrics
 from app.observability.metrics import (
     REQUEST_COUNT,
@@ -35,7 +42,7 @@ from app.observability.metrics import (
 
 app = FastAPI(
     title="LLM Chaos Engineering Platform",
-    version="0.5.0"
+    version="0.6.0"
 )
 
 # Core components
@@ -51,6 +58,18 @@ quality_evaluator = QualityEvaluator()
 
 slo_evaluator = SLOEvaluator()
 
+# Policy system
+policy_actions = PolicyActions(
+    fault_injector,
+    fallback_router
+)
+
+policy_engine = PolicyEngine(
+    policy_actions
+)
+
+incident_manager = IncidentManager()
+
 
 # ----------------------------------
 # Health Endpoint
@@ -61,7 +80,7 @@ def health():
     return {
         "status": "ok",
         "service": "llm-chaos-engine",
-        "version": "0.5.0"
+        "version": "0.6.0"
     }
 
 
@@ -96,6 +115,15 @@ def chaos_status():
 @app.get("/slo")
 def slo_status():
     return slo_evaluator.evaluate()
+
+
+# ----------------------------------
+# Incidents Endpoint
+# ----------------------------------
+
+@app.get("/incidents")
+def list_incidents():
+    return incident_manager.list()
 
 
 # ----------------------------------
@@ -228,6 +256,23 @@ Context:
     slo_evaluator.record_latency(
         total_latency
     )
+
+    # -------------------------------
+    # Governance & Policy Enforcement
+    # -------------------------------
+
+    slo_state = slo_evaluator.evaluate()
+
+    applied_policies = policy_engine.evaluate(
+        slo_state
+    )
+
+    if applied_policies:
+
+        incident_manager.create(
+            slo_state,
+            applied_policies
+        )
 
     # -------------------------------
     # Response
